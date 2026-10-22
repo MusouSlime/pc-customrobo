@@ -50,7 +50,8 @@ rm -rf "$B/testbuild"
 cmake -S "$B/testrecomp" -B "$B/testbuild" -G Ninja \
     -DCMAKE_CXX_COMPILER=clang++ \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_CXX_FLAGS_RELEASE="-O1 $GL_INCLUDE" >/dev/null
+    -DCMAKE_CXX_FLAGS_RELEASE="-O1 $GL_INCLUDE" \
+    -DWIIKIT_EXTRA="$HERE/tools/crbr.cmake" >/dev/null
 ninja -C "$B/testbuild" 2>&1 | tail -2
 
 echo "== 6. run"

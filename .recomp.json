@@ -15,8 +15,8 @@
   "approach": "Static recompilation of the original GameCube binary, wiikit runtime",
   "maintainers": [{ "name": "MusouSlime" }],
   "help": [
-    "Memory card support (EXI/CARD) in wiikit, so the game can save",
-    "GameCube AX micro-code revisions other than the newer one"
+    "GameCube AX micro-code revisions other than the newer one",
+    "An OpenGL ES backend in wiikit, for Android"
   ],
-  "notes": "The disc is GXCE01: one main.dol, no REL modules. The GameCube is supported by wiikit and was validated on Mega Man X: Command Mission. Not yet run: this port needs the disc."
+  "notes": "The disc is GXCE01: one main.dol, no REL modules. The GameCube is supported by wiikit and was validated on Mega Man X: Command Mission. The memory card was added to wiikit in this port (wiikit's branch feature/gamecube-memory-card) and is checked by the port's own test. The disc itself has not been read yet."
 }

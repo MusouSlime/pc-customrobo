@@ -31,6 +31,7 @@ executables, no assets. You need your own original disc.
 ```sh
 tools/setup.sh              # SDL3, the OpenGL headers, Dolphin's fonts
 tools/test_pipeline.sh      # check the toolchain, without the disc
+tools/test_memcard.sh       # check the memory card, without the disc
 ```
 
 Then put the disc's image in `build/` and follow `docs/01-disc-layout.md`:
@@ -46,7 +47,23 @@ The toolchain is: CMake, Ninja, a C++20 compiler (clang), SDL3 and OpenGL
 4.5. On this host the packages are unpacked into `~/.local/opt` (the system
 is rpm-ostree), and `tools/setup.sh` does it.
 
+## The memory card
+
+The game saves to a memory card, and wiikit did not have one: the EXI's
+channels carried only the boot ROM's chip. The card is the console's own,
+so the work was done in wiikit (on the branch
+`feature/gamecube-memory-card` of the submodule, for upstream), and this
+port has a test of it: `tools/test_memcard.sh` drives the EXI's registers
+the way the SDK drives them and checks the card's answers, its blocks,
+its checksums and the file it is in.
+
+The card is in `build/memcard/A.raw` (Dolphin's raw format), or where
+wiiboot's `--memcard` says.
+
 ## Status
+
+**Session 1 — the memory card.** Done, and checked without the disc:
+`tools/test_memcard.sh` passes.
 
 **Session 0 — the toolchain.** Checked without the disc: a synthetic
 GameCube disc is built, read, recompiled, built and run, and the guest's

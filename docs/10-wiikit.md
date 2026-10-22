@@ -26,23 +26,16 @@ game that boots, plays and sounds, at 50 frames a second.
 
 ### 1. Memory cards (EXI and the CARD u-code)
 
-**The largest gap, and the only one the game cannot be finished without.**
-Custom Robo saves its progress to a memory card. wiikit's table of layers
-lists "memory cards on EXI" and "the GameCube's second DSP task (the
-memory card's unlock)" as things still to come, and wiikit's other
-GameCube port cannot save either.
+**Done, in this port's session 1** (wiikit's branch
+`feature/gamecube-memory-card`, to go upstream). The card is the
+console's own, so it is wiikit's work and every GameCube port needs it:
+the card's storage and its format, the EXI device that speaks its
+protocol, and the u-code the SDK loads into the DSP to unlock it. See
+`00-sessions.md` for what was added and how it was checked.
 
-What it takes, from the other port's own list:
-
-* EXI channels 0 and 1, device 0, as a card: Dolphin's raw `.raw`
-  format, 59 or 251 blocks.
-* The CARD commands: ID, status, read, write, erase.
-* CARD's unlock: a DSP task of its own (the second DSP program in the
-  DOL). AX yields, the CPU answers `0xCDD10001` for a new task, and the
-  DSP's HLE must switch to it and back, resuming AX. Dolphin's CARD
-  u-code is at CRC `0x65d6cc6f`.
-
-This is game-agnostic, so it belongs in wiikit, not in this port.
+What the game needs of it: a card in slot A that it can write its save
+to, and read back. The card is in `build/memcard/A.raw` (Dolphin's raw
+format), or where wiiboot's `--memcard` says.
 
 ### 2. The AX u-code's revision
 
@@ -81,3 +74,8 @@ today.
   of 2004 did: pushed right, the view swings left. Games since turn it
   the other way, and this one has no option for it, so the port turns the
   C stick's X around. `CRBR_CAMERA=console` keeps the console's way.
+
+`tools/memcard_test.cpp` is the port's own test of wiikit's card: it
+drives the EXI's registers the way the SDK drives them. The card itself
+is wiikit's; the test is the port's, because a test of it belongs with
+the port that needs it.
