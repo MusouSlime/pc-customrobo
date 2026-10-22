@@ -1,0 +1,14 @@
+# The disc and everything derived from it: the game, its assets, the
+# build. Nothing of the game belongs in the repository.
+build/
+*.rvz
+*.iso
+*.gcm
+*.wbfs
+*.wia
+
+# The names and the units: derived from the disc.
+*.tsv
+
+__pycache__/
+*.pyc

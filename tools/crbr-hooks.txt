@@ -1,0 +1,8 @@
+# Custom Robo: the functions tools/crbr.cpp replaces, on top of
+# wiikit/runtime/hooks.txt:
+#     python -m wiikit.recomp build/extract/sys/main.dol --out build/recomp \
+#         --symbols build/names.tsv --hooks tools/crbr-hooks.txt
+#
+# Empty for now: the port has no game-specific fix yet. The camera's
+# direction is a filter over the pad, not a replaced function, so it lives
+# in tools/crbr.cpp.

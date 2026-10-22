@@ -1,0 +1,22 @@
+{
+  "$schema": "https://recomp.fyi/schema/v1.json",
+  "game": "Custom Robo",
+  "wikidata": "Q5196403",
+  "system": "GameCube",
+  "type": "recomp",
+  "original": { "region": "USA", "serial": "DOL-GXCE-USA" },
+  "project": "Custom Robo Recompiled",
+  "status": "exploring",
+  "targets": [
+    "Windows",
+    "Linux"
+  ],
+  "toolchain": "wiikit",
+  "approach": "Static recompilation of the original GameCube binary, wiikit runtime",
+  "maintainers": [{ "name": "MusouSlime" }],
+  "help": [
+    "Memory card support (EXI/CARD) in wiikit, so the game can save",
+    "GameCube AX micro-code revisions other than the newer one"
+  ],
+  "notes": "The disc is GXCE01: one main.dol, no REL modules. The GameCube is supported by wiikit and was validated on Mega Man X: Command Mission. Not yet run: this port needs the disc."
+}
