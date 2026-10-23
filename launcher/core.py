@@ -343,7 +343,7 @@ def build(iso: str, work: str, *, source: str | None = None, log_path: str | Non
     run(cm_args, log, env, project)
 
     step("Compiling the game (this takes a few minutes)")
-    run([ninja, "-C", str(builddir)], log, env, project)
+    run([ninja, "-C", str(builddir), "wiiboot"], log, env, project)
 
     step("Installing the console fonts")
     install_fonts(work, None)
