@@ -1,0 +1,412 @@
+# Custom Robo launcher for Windows.
+#
+# A thin WinForms front end over launcher/core.py: it builds the port from the
+# user's own disc image with the compiler and SDL3 already on this PC.
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+[System.Windows.Forms.Application]::EnableVisualStyles()
+
+$script:Root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+$script:CorePath = Join-Path $script:Root "launcher\core.py"
+$script:ProjectRoot = Join-Path $script:Root "project"
+if (-not (Test-Path (Join-Path $script:ProjectRoot "wiikit"))) {
+    $script:ProjectRoot = $script:Root
+}
+
+$script:SettingsDir = Join-Path $env:APPDATA "CustomRoboLauncher"
+$script:SettingsFile = Join-Path $script:SettingsDir "settings.json"
+$script:Settings = $null
+if (Test-Path $script:SettingsFile) {
+    try { $script:Settings = Get-Content -Raw $script:SettingsFile | ConvertFrom-Json } catch { }
+}
+if (-not $script:Settings) { $script:Settings = [pscustomobject]@{} }
+
+function Get-Setting([string]$Name, [string]$Default) {
+    $p = $script:Settings.PSObject.Properties[$Name]
+    if ($p -and $p.Value) { return [string]$p.Value }
+    return $Default
+}
+
+function Save-Settings {
+    New-Item -ItemType Directory -Force -Path $script:SettingsDir | Out-Null
+    $obj = [pscustomobject]@{
+        iso   = $script:txtIso.Text
+        work  = $script:txtWork.Text
+        fonts = $script:txtFonts.Text
+        sdl3  = $script:txtSdl3.Text
+    }
+    $obj | ConvertTo-Json | Set-Content -Encoding UTF8 $script:SettingsFile
+}
+
+function Find-Python {
+    $p = Get-Command python -ErrorAction SilentlyContinue
+    if ($p) {
+        $exe = $p.Path
+        if (-not $exe) { $exe = $p.Source }
+        return [pscustomobject]@{ Exe = $exe; Prefix = @() }
+    }
+    $p = Get-Command py -ErrorAction SilentlyContinue
+    if ($p) {
+        $exe = $p.Path
+        if (-not $exe) { $exe = $p.Source }
+        return [pscustomobject]@{ Exe = $exe; Prefix = @("-3") }
+    }
+    return $null
+}
+
+function Format-Arg([string]$Value) {
+    if ($Value -match '[\s"]') {
+        return '"' + ($Value -replace '"', '\"') + '"'
+    }
+    return $Value
+}
+
+function Show-Log-Tail([string]$Path, [int]$Lines = 22) {
+    if (Test-Path $Path) {
+        return (Get-Content $Path -Tail $Lines -ErrorAction SilentlyContinue | Out-String)
+    }
+    return ""
+}
+
+# ---------------------------------------------------------------------------
+# the window
+
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "Custom Robo: Battle Revolution"
+$form.ClientSize = New-Object System.Drawing.Size(820, 640)
+$form.MinimumSize = New-Object System.Drawing.Size(700, 520)
+$form.StartPosition = "CenterScreen"
+
+function Add-Label([string]$Text, [int]$X, [int]$Y) {
+    $l = New-Object System.Windows.Forms.Label
+    $l.Text = $Text
+    $l.Location = New-Object System.Drawing.Point($X, $Y)
+    $l.Size = New-Object System.Drawing.Size(95, 22)
+    $form.Controls.Add($l)
+}
+
+function Add-TextBox([string]$Text, [int]$X, [int]$Y, [int]$W) {
+    $t = New-Object System.Windows.Forms.TextBox
+    $t.Text = $Text
+    $t.Location = New-Object System.Drawing.Point($X, $Y)
+    $t.Size = New-Object System.Drawing.Size($W, 24)
+    $t.Anchor = "Top,Left,Right"
+    $form.Controls.Add($t)
+    return $t
+}
+
+function Add-Browse([int]$X, [int]$Y, $Handler) {
+    $b = New-Object System.Windows.Forms.Button
+    $b.Text = "Browse..."
+    $b.Location = New-Object System.Drawing.Point($X, $Y)
+    $b.Size = New-Object System.Drawing.Size(88, 25)
+    $b.Anchor = "Top,Right"
+    $b.Add_Click($Handler)
+    $form.Controls.Add($b)
+    return $b
+}
+
+Add-Label "Disc image" 12 16
+$script:txtIso = Add-TextBox (Get-Setting "iso" "") 112 12 590
+Add-Browse 710 11 { Browse-Iso } | Out-Null
+
+Add-Label "Working folder" 12 56
+$script:txtWork = Add-TextBox (Get-Setting "work" (Join-Path $env:LOCALAPPDATA "CustomRoboLauncher")) 112 52 590
+Add-Browse 710 51 { Browse-Work } | Out-Null
+
+Add-Label "Dolphin fonts" 12 96
+$script:txtFonts = Add-TextBox (Get-Setting "fonts" "") 112 92 590
+Add-Browse 710 91 { Browse-Fonts } | Out-Null
+
+Add-Label "SDL3 folder" 12 136
+$script:txtSdl3 = Add-TextBox (Get-Setting "sdl3" "") 112 132 590
+Add-Browse 710 131 { Browse-Sdl3 } | Out-Null
+
+$btnBuild = New-Object System.Windows.Forms.Button
+$btnBuild.Text = "Build"
+$btnBuild.Location = New-Object System.Drawing.Point(112, 172)
+$btnBuild.Size = New-Object System.Drawing.Size(100, 30)
+$btnBuild.Add_Click({ Start-Build })
+$form.Controls.Add($btnBuild)
+
+$btnRun = New-Object System.Windows.Forms.Button
+$btnRun.Text = "Run"
+$btnRun.Location = New-Object System.Drawing.Point(222, 172)
+$btnRun.Size = New-Object System.Drawing.Size(100, 30)
+$btnRun.Add_Click({ Start-Game })
+$form.Controls.Add($btnRun)
+
+$btnOpen = New-Object System.Windows.Forms.Button
+$btnOpen.Text = "Open folder"
+$btnOpen.Location = New-Object System.Drawing.Point(332, 172)
+$btnOpen.Size = New-Object System.Drawing.Size(110, 30)
+$btnOpen.Add_Click({
+    $w = $script:txtWork.Text
+    New-Item -ItemType Directory -Force -Path $w | Out-Null
+    Start-Process explorer.exe $w
+})
+$form.Controls.Add($btnOpen)
+
+$btnCancel = New-Object System.Windows.Forms.Button
+$btnCancel.Text = "Cancel build"
+$btnCancel.Location = New-Object System.Drawing.Point(452, 172)
+$btnCancel.Size = New-Object System.Drawing.Size(110, 30)
+$btnCancel.Enabled = $false
+$btnCancel.Add_Click({ Cancel-Build })
+$form.Controls.Add($btnCancel)
+
+$script:progress = New-Object System.Windows.Forms.ProgressBar
+$script:progress.Location = New-Object System.Drawing.Point(112, 214)
+$script:progress.Size = New-Object System.Drawing.Size(686, 16)
+$script:progress.Anchor = "Top,Left,Right"
+$form.Controls.Add($script:progress)
+
+$script:lblStatus = New-Object System.Windows.Forms.Label
+$script:lblStatus.Text = "Choose your disc image, then press Build."
+$script:lblStatus.Location = New-Object System.Drawing.Point(112, 234)
+$script:lblStatus.Size = New-Object System.Drawing.Size(686, 22)
+$script:lblStatus.Anchor = "Top,Left,Right"
+$form.Controls.Add($script:lblStatus)
+
+$script:txtLog = New-Object System.Windows.Forms.TextBox
+$script:txtLog.Multiline = $true
+$script:txtLog.ReadOnly = $true
+$script:txtLog.ScrollBars = "Both"
+$script:txtLog.WordWrap = $false
+$script:txtLog.Font = New-Object System.Drawing.Font("Consolas", 8.5)
+$script:txtLog.Location = New-Object System.Drawing.Point(12, 264)
+$script:txtLog.Size = New-Object System.Drawing.Size(796, 360)
+$script:txtLog.Anchor = "Top,Bottom,Left,Right"
+$form.Controls.Add($script:txtLog)
+
+$script:Timer = New-Object System.Windows.Forms.Timer
+$script:Timer.Interval = 500
+$script:Timer.Add_Tick({ Refresh-Build })
+$script:Proc = $null
+$script:Building = $false
+
+# ---------------------------------------------------------------------------
+# actions
+
+function Browse-Iso {
+    $d = New-Object System.Windows.Forms.OpenFileDialog
+    $d.Title = "Choose your Custom Robo (USA) disc image"
+    $d.Filter = "Disc images (*.iso;*.rvz;*.wia;*.gcm;*.wbfs)|*.iso;*.rvz;*.wia;*.gcm;*.wbfs|All files (*.*)|*.*"
+    if ($script:txtIso.Text) { $d.InitialDirectory = Split-Path $script:txtIso.Text -Parent }
+    if ($d.ShowDialog() -eq "OK") {
+        $script:txtIso.Text = $d.FileName
+        Save-Settings
+    }
+}
+
+function Browse-Work {
+    $d = New-Object System.Windows.Forms.FolderBrowserDialog
+    $d.Description = "Folder for the extracted disc, recompiled sources and build"
+    if ($d.ShowDialog() -eq "OK") {
+        $script:txtWork.Text = $d.SelectedPath
+        Save-Settings
+    }
+}
+
+function Browse-Fonts {
+    $d = New-Object System.Windows.Forms.FolderBrowserDialog
+    $d.Description = "Dolphin's Sys\GC folder (contains font_western.bin)"
+    if ($d.ShowDialog() -eq "OK") {
+        $script:txtFonts.Text = $d.SelectedPath
+        Save-Settings
+    }
+}
+
+function Browse-Sdl3 {
+    $d = New-Object System.Windows.Forms.FolderBrowserDialog
+    $d.Description = "SDL3 development package (the folder containing cmake\SDL3 or lib\cmake\SDL3)"
+    if ($d.ShowDialog() -eq "OK") {
+        $script:txtSdl3.Text = $d.SelectedPath
+        Save-Settings
+    }
+}
+
+function Set-Busy([bool]$Busy) {
+    $script:Building = $Busy
+    $btnBuild.Enabled = -not $Busy
+    $btnRun.Enabled = -not $Busy
+    $btnOpen.Enabled = -not $Busy
+    $btnCancel.Enabled = $Busy
+    if ($Busy) {
+        $script:progress.Style = "Marquee"
+        $script:progress.MarqueeAnimationSpeed = 30
+    } else {
+        $script:progress.Style = "Blocks"
+        $script:progress.Value = 0
+    }
+}
+
+function Start-Build {
+    if ($script:Building) { return }
+    $iso = $script:txtIso.Text.Trim()
+    $work = $script:txtWork.Text.Trim()
+    if (-not (Test-Path -LiteralPath $iso -PathType Leaf)) {
+        [System.Windows.Forms.MessageBox]::Show("Choose your disc image first.", "Custom Robo") | Out-Null
+        return
+    }
+    if (-not $work) {
+        [System.Windows.Forms.MessageBox]::Show("Choose a working folder first.", "Custom Robo") | Out-Null
+        return
+    }
+    if (-not (Test-Path $script:CorePath)) {
+        [System.Windows.Forms.MessageBox]::Show("launcher\core.py is missing from this package.", "Custom Robo") | Out-Null
+        return
+    }
+    $py = Find-Python
+    if (-not $py) {
+        [System.Windows.Forms.MessageBox]::Show(
+            "Python 3 was not found on PATH.`r`n`r`nInstall Python 3.10 or newer from python.org and tick 'Add Python to PATH'.",
+            "Custom Robo") | Out-Null
+        return
+    }
+    New-Item -ItemType Directory -Force -Path $work | Out-Null
+    Save-Settings
+
+    $env:CUSTOM_ROBO_BUNDLE = $script:Root
+    $env:CUSTOM_ROBO_PROJECT = $script:ProjectRoot
+    $env:PYTHONPATH = $script:ProjectRoot
+
+    $script:LogPath = Join-Path $work "build.log"
+    $script:StdoutPath = Join-Path $work "launcher-stdout.txt"
+    $script:StderrPath = Join-Path $work "launcher-stderr.txt"
+    Remove-Item -Force -ErrorAction SilentlyContinue $script:StdoutPath, $script:StderrPath
+
+    $argv = @()
+    $argv += $py.Prefix
+    $argv += @($script:CorePath, "build", "--iso", $iso, "--work", $work, "--log", $script:LogPath)
+    if ($script:txtSdl3.Text.Trim()) { $argv += @("--sdl3", $script:txtSdl3.Text.Trim()) }
+    if ($script:txtFonts.Text.Trim()) { $argv += @("--fonts", $script:txtFonts.Text.Trim()) }
+    $argLine = (($argv | ForEach-Object { Format-Arg $_ }) -join " ")
+
+    $script:txtLog.Text = "Building...`r`n"
+    $script:lblStatus.Text = "Starting the build..."
+    Set-Busy $true
+    try {
+        $script:Proc = Start-Process -FilePath $py.Exe -ArgumentList $argLine `
+            -WorkingDirectory $script:Root -RedirectStandardOutput $script:StdoutPath `
+            -RedirectStandardError $script:StderrPath -NoNewWindow -PassThru
+        $script:Timer.Start()
+    } catch {
+        Set-Busy $false
+        [System.Windows.Forms.MessageBox]::Show("Could not start Python:`r`n`r`n$_", "Custom Robo") | Out-Null
+    }
+}
+
+function Refresh-Build {
+    if (-not $script:Proc) { return }
+    $text = ""
+    if (Test-Path $script:LogPath) {
+        $text = Get-Content $script:LogPath -Tail 250 -ErrorAction SilentlyContinue | Out-String
+    }
+    $err = ""
+    if (Test-Path $script:StderrPath) {
+        $err = Get-Content $script:StderrPath -Tail 40 -ErrorAction SilentlyContinue | Out-String
+    }
+    if ($err) { $text = $text + "`r`n" + $err }
+    if ($script:txtLog.Text -ne $text) {
+        $script:txtLog.Text = $text
+        $script:txtLog.SelectionStart = $script:txtLog.TextLength
+        $script:txtLog.ScrollToCaret()
+    }
+    $script:lblStatus.Text = "Building... extracting, recompiling and compiling."
+    if ($script:Proc.HasExited) {
+        $script:Timer.Stop()
+        $code = $script:Proc.ExitCode
+        Set-Busy $false
+        if ($code -eq 0) {
+            $script:lblStatus.Text = "Build complete. Press Run."
+        } else {
+            $script:lblStatus.Text = "Build failed. See the log above."
+            $msg = "The build failed (exit code $code).`r`n`r`n" + (Show-Log-Tail $script:LogPath 18)
+            [System.Windows.Forms.MessageBox]::Show($msg, "Custom Robo") | Out-Null
+        }
+        $script:Proc = $null
+    }
+}
+
+function Cancel-Build {
+    if (-not $script:Proc) { return }
+    try { taskkill /PID $script:Proc.Id /T /F | Out-Null } catch { }
+    $script:Timer.Stop()
+    Set-Busy $false
+    $script:lblStatus.Text = "Build cancelled."
+    $script:Proc = $null
+}
+
+function Start-Game {
+    if ($script:Building) { return }
+    $work = $script:txtWork.Text.Trim()
+    $exe = Join-Path $work "recomp-build\wiiboot.exe"
+    if (-not (Test-Path $exe)) {
+        [System.Windows.Forms.MessageBox]::Show("The game has not been built yet. Press Build first.", "Custom Robo") | Out-Null
+        return
+    }
+    $py = Find-Python
+    if (-not $py) {
+        [System.Windows.Forms.MessageBox]::Show("Python 3 was not found on PATH.", "Custom Robo") | Out-Null
+        return
+    }
+    $env:CUSTOM_ROBO_BUNDLE = $script:Root
+    $env:CUSTOM_ROBO_PROJECT = $script:ProjectRoot
+    $env:PYTHONPATH = $script:ProjectRoot
+    if ($script:txtSdl3.Text.Trim()) { $env:SDL3_DIR = $script:txtSdl3.Text.Trim() }
+    if ($script:txtFonts.Text.Trim()) { $env:CUSTOM_ROBO_FONTS = $script:txtFonts.Text.Trim() }
+
+    $out = Join-Path $work "launcher-run.txt"
+    $err = Join-Path $work "launcher-run-error.txt"
+    Remove-Item -Force -ErrorAction SilentlyContinue $out, $err
+
+    $argv = @()
+    $argv += $py.Prefix
+    $argv += @($script:CorePath, "fonts", "--work", $work)
+    if ($script:txtFonts.Text.Trim()) { $argv += @("--source", $script:txtFonts.Text.Trim()) }
+    $fontLine = (($argv | ForEach-Object { Format-Arg $_ }) -join " ")
+    $p = Start-Process -FilePath $py.Exe -ArgumentList $fontLine -NoNewWindow -Wait -PassThru `
+        -RedirectStandardOutput $out -RedirectStandardError $err -WorkingDirectory $script:Root
+    if ($p.ExitCode -ne 0) {
+        $msg = "The console fonts could not be installed.`r`n`r`n" +
+               (Get-Content $err -Raw -ErrorAction SilentlyContinue) + "`r`n" +
+               (Get-Content $out -Raw -ErrorAction SilentlyContinue)
+        [System.Windows.Forms.MessageBox]::Show($msg, "Custom Robo") | Out-Null
+        return
+    }
+
+    $argv = @()
+    $argv += $py.Prefix
+    $argv += @($script:CorePath, "run", "--work", $work, "--detach")
+    if ($script:txtSdl3.Text.Trim()) { $argv += @("--sdl3", $script:txtSdl3.Text.Trim()) }
+    $runLine = (($argv | ForEach-Object { Format-Arg $_ }) -join " ")
+    $p = Start-Process -FilePath $py.Exe -ArgumentList $runLine -NoNewWindow -Wait -PassThru `
+        -RedirectStandardOutput $out -RedirectStandardError $err -WorkingDirectory $script:Root
+    if ($p.ExitCode -ne 0) {
+        $msg = "The game could not start.`r`n`r`n" +
+               (Get-Content $err -Raw -ErrorAction SilentlyContinue) + "`r`n" +
+               (Show-Log-Tail (Join-Path $work "run.log") 20)
+        [System.Windows.Forms.MessageBox]::Show($msg, "Custom Robo") | Out-Null
+        return
+    }
+    $script:lblStatus.Text = "Custom Robo is running."
+}
+
+$form.Add_FormClosing({
+    param($sender, $e)
+    if ($script:Building) {
+        $r = [System.Windows.Forms.MessageBox]::Show(
+            "A build is still running. Cancel it and quit?", "Custom Robo",
+            [System.Windows.Forms.MessageBoxButtons]::YesNo)
+        if ($r -ne "Yes") { $e.Cancel = $true; return }
+        Cancel-Build
+    }
+})
+
+# Start with a sane status if a build already exists.
+if (Test-Path (Join-Path $script:txtWork.Text "recomp-build\wiiboot.exe")) {
+    $script:lblStatus.Text = "A build is ready. Press Run, or choose a disc image and press Build."
+}
+
+[void]$form.ShowDialog()

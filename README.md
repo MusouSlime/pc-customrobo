@@ -23,6 +23,7 @@ executables, no assets. You need your own original disc.
 
     docs/     the disc, the executable, the route, the session log
     tools/    this game's tools and layer, and the port's scripts
+    launcher/ the Linux AppImage and Windows launchers
     wiikit/   the game-agnostic GameCube and Wii toolkit (a submodule)
     build/    (not in git) the disc, everything derived from it, the build
 
@@ -47,6 +48,31 @@ The toolchain is: CMake, Ninja, a C++20 compiler (clang), SDL3 and OpenGL
 4.5. On this host the packages are unpacked into `~/.local/opt` (the system
 is rpm-ostree), and `tools/setup.sh` does it.
 
+## Launchers
+
+There are thin launchers for Linux and Windows. They carry the port's tools
+and (on Linux) SDL3 and the OpenGL headers, ask for your own disc image, and
+do the extraction, recompilation and build in a working folder. No game data
+or compiled game code is included.
+
+```sh
+launcher/build-appimage.sh          # -> build/CustomRoboLauncher-x86_64.AppImage
+launcher/build-windows-package.sh   # -> build/CustomRoboLauncher-windows.zip
+```
+
+The AppImage uses `yad`/`zenity` and needs Python 3, clang, CMake and Ninja
+installed; SDL3 is bundled. The Windows package uses a WinForms UI and needs
+Python 3, clang, CMake, Ninja and an SDL3 development package. See
+`launcher/README.md` and `launcher/windows/README.txt`.
+
+Both GUIs are front ends over `launcher/core.py`, which is also usable alone:
+
+```sh
+python3 launcher/core.py build --iso "Custom Robo (USA).iso" \
+    --work ~/.local/share/custom-robo
+python3 launcher/core.py run --work ~/.local/share/custom-robo
+```
+
 ## The memory card
 
 The game saves to a memory card, and wiikit did not have one: the EXI's
@@ -60,16 +86,33 @@ its checksums and the file it is in.
 The card is in `build/memcard/A.raw` (Dolphin's raw format), or where
 wiiboot's `--memcard` says.
 
+## Content unlocks
+
+The port boots with all modes, holosseums, robos and parts unlocked. This is
+the USA version's own unlock table, applied through `VIWaitForRetrace` so a
+menu or save load cannot take it back:
+
+- Unlock Bonuses (`0x80321D44`)
+- owned bodies/guns/bombs/pods/legs (Arcade & Vs. Mode)
+- all holosseums (Vs. Mode)
+- shop stock for all parts
+- every Parts Glossary entry
+
+Set `CRBR_UNLOCK=0` to boot with normal story progression instead. The
+unlocks are runtime state; a normal in-game save still saves story progress.
+
 ## Status
+
+The disc is read, recompiled (one DOL, 3558 units) and runs: it boots,
+renders, plays audio, takes input, and loads a battle. Saving works on the
+memory card. See `docs/00-sessions.md` for the session log.
 
 **Session 1 — the memory card.** Done, and checked without the disc:
 `tools/test_memcard.sh` passes.
 
 **Session 0 — the toolchain.** Checked without the disc: a synthetic
 GameCube disc is built, read, recompiled, built and run, and the guest's
-own code prints through the runtime. See `docs/00-sessions.md`.
-
-The disc itself has not been read yet: this port needs it.
+own code prints through the runtime.
 
 ## Documentation
 

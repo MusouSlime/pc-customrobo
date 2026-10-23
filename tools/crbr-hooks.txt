@@ -3,6 +3,26 @@
 #     python -m wiikit.recomp build/extract/sys/main.dol --out build/recomp \
 #         --symbols build/names.tsv --hooks tools/crbr-hooks.txt
 #
-# Empty for now: the port has no game-specific fix yet. The camera's
-# direction is a filter over the pad, not a replaced function, so it lives
-# in tools/crbr.cpp.
+# The card layer: traced by the port (WIIKIT_CARDTDBG=1), not changed. They are
+# listed here so ppc_hook can give each a slot.
+
+CARDProbeEx
+CARDMountAsync
+__CARDMountCallback
+CARDCheckExAsync
+__CARDReadStatus
+__CARDReadSegment
+__CARDEnableInterrupt
+__CARDExiHandler
+CARDWriteAsync
+__CARDWritePage
+__CARDEraseSector
+__CARDAllocBlock
+__CARDFreeBlock
+__CARDUpdateDir
+__CARDVerify
+__CARDUpdateFatBlock
+CARDCreateAsync
+CARDDeleteAsync
+CARDFormatAsync
+VIWaitForRetrace

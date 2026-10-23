@@ -1,3 +1,4 @@
 [submodule "wiikit"]
 	path = wiikit
-	url = https://github.com/vs-sr-dev/wiikit.git
+	url = ../wiikit.git
+	branch = feature/gamecube-memory-card

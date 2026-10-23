@@ -126,3 +126,113 @@ the port:
 
 Left: the disc. The port's first real session is the next one, and it
 starts with the disc (`01-disc-layout.md`).
+
+# Session 2: the card screen, saving, and the disc
+
+## The black memory card screen
+
+The screen was not blank: the game was drawing a dialog the whole
+time ("There is no save data on the Memory Card in Slot A", then "Will
+you begin without creating save data? YES / NO"). It rendered black
+because of the depth range, not the card.
+
+**The GX viewport's z range is not always inside 0..1.** This game sets
+the XF viewport to `wd 320, ht -240, zRange 999*2^24, xOrig 662,
+yOrig 582, farZ 1000*2^24` and lets the scissor offset (342) put the
+viewport back at 0,0. The runtime's vertex shader computes
+`gl_Position.z = w*farZ/2^24 + z*zRange/2^24`, which is 1..1000 for
+this game, not 0..1. GL clips every fragment at `z > w`, so every draw
+in the dialog (and any other screen using the oversized range) vanished.
+
+The fix is `glEnable(GL_DEPTH_CLAMP)` in `setup()`. It leaves normal
+depth ranges alone and turns near/far clipping off for the oversized
+ones, so those fragments reach the depth buffer (clamped to 1.0).
+That is enough for the 2D screens, which draw with the depth test off.
+A fuller fix (remapping the range in the vertex shader as Dolphin does)
+matters only if a 3D scene z-fights; none is known yet.
+
+A second trap found on the way: the shader cache is keyed by the GX
+register configuration, not by the generator. After changing
+`gxshader.cpp`, delete `build/shadercache` or the old binary is reused.
+
+Debug switches added while chasing this (all opt-in):
+`WIIKIT_VTXLOG` (every vertex of a draw), `WIIKIT_NOCULL`,
+`WIIKIT_FORCEWHITE` (force the TEV output red), and the drawlog now
+prints the scissor, its offset, texmap 0 and the TEV env registers.
+
+## The card
+
+The mount now completes (`__CARDMountCallback(0) result 0`,
+`CARDMountAsync(0) -> 0`, `CARDCheckExAsync(0) -> 0`) and the game
+reaches its card dialog. The card is formatted but has no `GXCE`
+directory, so the game offers to start without saving. Creating the
+save is the next piece of work.
+
+# Session 3: saves, battles, and content
+
+Saving now completes end to end. The missing piece was the EXI interrupt:
+`exi_irq()` had to assert `PI_EXI` when the card had an interrupt pending and
+the EXI mask was set. With that, `__CARDExiHandler`, `__CARDWritePage` and
+`__CARDUpdateDir` run, and `build/memcard/A.raw` contains the `GXCE01`
+directory entry and the `CustomRobo-BattleRevolution` file (start block 5,
+15 blocks).
+
+A battle loads and renders: Vs. Mode -> Single Battle -> P1 vs CPU -> 3-Set
+Match -> Basic Arena gives a working 1P vs CPU match (1000 HP each, 120 s).
+
+The USA unlock table is applied in `tools/crbr.cpp` on `VIWaitForRetrace`
+(default on; `CRBR_UNLOCK=0` restores normal progression):
+
+    0x80321D44 = 0xFFFFFFFF   Unlock Bonuses
+    0x803BF79C/7BC/7DC/7FC    all bodies/guns/bombs/pods (Arcade & Vs.)
+    0x803BF81C = 0x0002FFFF   all legs
+    0x803BF83C = 0x0003FFFF   all holosseums (Vs.)
+    0x803BFB9C/BBC/BDC/BFC/1C shop stock for all parts
+    0x803BF8EC..90C           every Parts Glossary entry
+
+Verified in game: Vs. Mode stage select shows the nine Vs. holosseums;
+Parts Glossary shows real names and models for bodies and guns instead of
+`???`; Arcade Mode and Parts Index are available. The remaining stage-select
+slots are story-only placeholders, not Vs. holosseums.
+
+# Session 4: launchers
+
+The launchers are thin. They carry the port's Python tools, wiikit, the port
+hooks and a minimal hook-name table, but no game data, no compiler and no
+prebuilt game binary. They take the user's own disc image and do the whole
+pipeline in a writable working folder:
+
+    extract -> recompile -> CMake/Ninja compile -> install fonts -> run
+
+`launcher/core.py` is the shared implementation. `launcher/linux_ui.py`
+drives it with yad (or zenity); `launcher/windows/CustomRoboLauncher.ps1`
+drives it with WinForms.
+
+**What the packages carry.** The Linux AppImage bundles the project source,
+`tools/names-hooks.txt`, SDL3 and the OpenGL headers (about 10 MiB unpacked,
+3.2 MiB compressed). The Windows zip carries the source, the WinForms UI and
+the GL headers; the user supplies the SDL3 development package that matches
+their compiler.
+
+**Why a minimal name table.** The recompiler only needs names to resolve the
+runtime and port hooks. `tools/names-hooks.txt` contains the 26 hook names
+that exist in this DOL; recompiling with it still reports the same 80 resolved
+switch tables as the full `build/names.tsv` (26 hooks, 0 data symbols). The
+full 633-name table is derived from the disc and stays in `build/`.
+
+**Builds and runs.** A build from the ISO through `core.py` was tested into a
+clean working folder: 3558 units, 80 switch tables, 84 Ninja targets, working
+`wiiboot`. Both the repository SDL3 and the AppImage's bundled SDL3 launch the
+game; `run.log` catches an immediate missing-library failure instead of the
+launcher closing silently. The AppImage UI was started with
+`--appimage-extract-and-run` and stayed up with its menu.
+
+**Windows.** wiikit already has `_WIN32` paths in `os.cpp`, `mem.cpp` and the
+CMake (`winmm`), and the WinForms launcher is complete, but no Windows build
+has been run on this host. The package therefore says so in its README and
+shows the failing compiler command in the log panel. Recommended environment:
+MSYS2 UCRT64 with clang, CMake, Ninja, SDL3 and Python.
+
+**Saves and unlocks.** The working card is `WORK/memcard/A.raw`; the launcher
+does not reset it. The unlock writes remain default-on (`CRBR_UNLOCK=0`
+restores normal progression).

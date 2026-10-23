@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Custom Robo: Battle Revolution
+GenericName=Game Launcher
+Comment=Build and play your own Custom Robo (USA) disc image
+Exec=custom-robo-launcher
+Icon=custom-robo
+Terminal=false
+Categories=Game;Emulator;
+Keywords=Custom Robo;GameCube;launcher;

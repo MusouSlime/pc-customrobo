@@ -12,3 +12,13 @@ build/
 
 __pycache__/
 *.pyc
+
+# Debug output from a local run.
+efb_*.png
+crash.log
+drawlog.txt
+vtxlog.txt
+gxtrace_*.txt
+frame_*.png
+shot_*.png
+nand/
