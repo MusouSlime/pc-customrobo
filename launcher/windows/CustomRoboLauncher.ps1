@@ -273,7 +273,7 @@ $script:chkUnlock = New-Object System.Windows.Forms.CheckBox
 $script:chkUnlock.Text = "Unlock all robos, parts and stages"
 $script:chkUnlock.Location = New-Object System.Drawing.Point(112, 208)
 $script:chkUnlock.Size = New-Object System.Drawing.Size(320, 24)
-$script:chkUnlock.Checked = ((Get-Setting "unlock" "1") -ne "0")
+$script:chkUnlock.Checked = -not (@("0", "false", "False") -contains (Get-Setting "unlock" "1"))
 $script:chkUnlock.Add_CheckedChanged({ Save-Settings })
 $form.Controls.Add($script:chkUnlock)
 
