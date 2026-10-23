@@ -480,6 +480,7 @@ function Save-Diagnostics([string]$Work) {
     $zip = Join-Path $Work "CustomRobo-diagnostics-$stamp.zip"
     $files = @()
     foreach ($name in @("build.log", "run.log", "keys.txt", "crash.log",
+                        "drawlog.txt", "vtxlog.txt",
                         "launcher-stdout.txt", "launcher-stderr.txt",
                         "launcher-run.txt", "launcher-run-error.txt",
                         "diagnose-stdout.txt", "diagnose-stderr.txt")) {
@@ -564,6 +565,8 @@ function Start-Diagnose {
         WIIKIT_EFBDUMP_EVERY = "0"
         WIIKIT_EFBDUMP_STRIDE = "0"
         WIIKIT_GLDEBUG = "1"
+        WIIKIT_DRAWLOG = "1"
+        WIIKIT_VTXLOG = "1"
     }
     if ($script:chkWhite.Checked) { $diag["WIIKIT_FORCEWHITE"] = "1" }
     $saved = @{}
