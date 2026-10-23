@@ -72,8 +72,8 @@ def menu(options: list[str], text: str) -> str | None:
     if YAD:
         cmd = ["yad", "--list", "--title", TITLE, "--text", text,
                "--column", "Action", "--no-headers", "--width", "460",
-               "--height", str(80 + 32 * len(options)), "--center",
-               "--button", "Quit:1"]
+               "--height", str(150 + 34 * len(options)), "--center",
+               "--separator=", "--button", "OK:0", "--button", "Quit:1"]
         rc, out = _run_dialog(cmd + options)
     elif ZENITY:
         cmd = ["zenity", "--list", "--title", TITLE, "--text", text,
@@ -89,7 +89,13 @@ def menu(options: list[str], text: str) -> str | None:
             return options[n] if 0 <= n < len(options) else None
         except (ValueError, EOFError):
             return None
-    return out.splitlines()[0] if rc == 0 and out else None
+    if rc != 0 or not out:
+        return None
+    line = out.splitlines()[0].strip()
+    # yad's default separator is "|" even with a single column; drop it.
+    if "|" in line:
+        line = line.split("|", 1)[0].strip()
+    return line or None
 
 
 def pick_file(title: str, start: str | None, patterns: str) -> str | None:
