@@ -10,13 +10,14 @@ Start it with "Custom Robo Launcher.cmd".
 What you need
 -------------
   * Windows 10 or 11, 64-bit
-  * Python 3.10 or newer (python.org; tick "Add Python to PATH")
+  * Python 3.10 or newer. The launcher has an "Install Python" button that
+    uses winget or the official python.org installer.
   * A C++ toolchain: clang++ with a working linker
-  * CMake 3.20 or newer
-  * Ninja
   * The SDL3 development package for the same toolchain
   * Dolphin installed once (the launcher needs its Sys\GC files:
     font_western.bin, font_japanese.bin, dsp_coef.bin)
+
+CMake and Ninja are bundled in this package; you do not need to install them.
 
 Recommended: MSYS2 (UCRT64)
 ---------------------------
@@ -25,14 +26,15 @@ Recommended: MSYS2 (UCRT64)
 
        pacman -Syu
        pacman -S mingw-w64-ucrt-x86_64-clang \
-                 mingw-w64-ucrt-x86_64-cmake \
-                 mingw-w64-ucrt-x86_64-ninja \
-                 mingw-w64-ucrt-x86_64-SDL3 \
-                 python
+                 mingw-w64-ucrt-x86_64-SDL3
 
   3. Start "Custom Robo Launcher.cmd" from that same MSYS2 UCRT64 shell.
   4. In the launcher, set "SDL3 folder" to C:\msys64\ucrt64.
      (The launcher checks lib\cmake\SDL3 and cmake\SDL3.)
+
+Python can come from MSYS2 (`pacman -S python`) or from the launcher's
+"Install Python" button. If you use the button, restart the launcher if the
+status still says Python is missing; a new process sees the updated PATH.
 
 If you use Visual Studio's LLVM/clang, install the SDL3 VC development
 package and choose the folder that contains cmake\SDL3. Run the launcher
@@ -57,4 +59,6 @@ Folder layout
   launcher\windows\...              this GUI
   project\wiikit\                   static recompiler and runtime
   project\tools\                    port hooks and build files
+  deps\cmake\                       bundled CMake
+  deps\ninja.exe                    bundled Ninja
   deps\gl\include\GL\               OpenGL headers for the runtime

@@ -50,19 +50,20 @@ is rpm-ostree), and `tools/setup.sh` does it.
 
 ## Launchers
 
-There are thin launchers for Linux and Windows. They carry the port's tools
-and (on Linux) SDL3 and the OpenGL headers, ask for your own disc image, and
-do the extraction, recompilation and build in a working folder. No game data
-or compiled game code is included.
+There are thin launchers for Linux and Windows. They carry the port's tools,
+CMake and Ninja, and (on Linux) SDL3 and the OpenGL headers, ask for your own
+disc image, and do the extraction, recompilation and build in a working folder.
+No game data or compiled game code is included.
 
 ```sh
 launcher/build-appimage.sh          # -> build/CustomRoboLauncher-x86_64.AppImage
 launcher/build-windows-package.sh   # -> build/CustomRoboLauncher-windows.zip
 ```
 
-The AppImage uses `yad`/`zenity` and needs Python 3, clang, CMake and Ninja
-installed; SDL3 is bundled. The Windows package uses a WinForms UI and needs
-Python 3, clang, CMake, Ninja and an SDL3 development package. See
+The AppImage uses `yad`/`zenity` and needs Python 3 and clang installed;
+CMake, Ninja and SDL3 are bundled. The Windows package uses a WinForms UI,
+can install Python 3 from the launcher, and needs clang and an SDL3
+development package; CMake and Ninja are bundled. See
 `launcher/README.md` and `launcher/windows/README.txt`.
 
 Both GUIs are front ends over `launcher/core.py`, which is also usable alone:

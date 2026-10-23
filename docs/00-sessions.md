@@ -209,10 +209,10 @@ drives it with yad (or zenity); `launcher/windows/CustomRoboLauncher.ps1`
 drives it with WinForms.
 
 **What the packages carry.** The Linux AppImage bundles the project source,
-`tools/names-hooks.txt`, SDL3 and the OpenGL headers (about 10 MiB unpacked,
-3.2 MiB compressed). The Windows zip carries the source, the WinForms UI and
-the GL headers; the user supplies the SDL3 development package that matches
-their compiler.
+`tools/names-hooks.txt`, CMake, Ninja, SDL3 and the OpenGL headers (about
+12 MiB compressed). The Windows zip carries the source, the WinForms UI,
+CMake, Ninja and the GL headers; the user supplies the SDL3 development
+package that matches their compiler.
 
 **Why a minimal name table.** The recompiler only needs names to resolve the
 runtime and port hooks. `tools/names-hooks.txt` contains the 26 hook names
@@ -231,7 +231,15 @@ launcher closing silently. The AppImage UI was started with
 CMake (`winmm`), and the WinForms launcher is complete, but no Windows build
 has been run on this host. The package therefore says so in its README and
 shows the failing compiler command in the log panel. Recommended environment:
-MSYS2 UCRT64 with clang, CMake, Ninja, SDL3 and Python.
+MSYS2 UCRT64 with clang and SDL3; CMake and Ninja are bundled.
+
+**Launcher dependencies.** CMake 3.31.6 and Ninja 1.12.1 are fetched at
+package-build time and carried in `deps/` by both launchers, so the user does
+not install either. The Windows form has an **Install Python** button that
+uses winget, then falls back to the official python.org installer. The Linux
+AppRun bootstrap offers to install `python3` through the distro's package
+manager when it is missing. The compiler and SDL3 development files remain
+the user's choice: the binary should match their runtime.
 
 **Saves and unlocks.** The working card is `WORK/memcard/A.raw`; the launcher
 does not reset it. The unlock writes remain default-on (`CRBR_UNLOCK=0`

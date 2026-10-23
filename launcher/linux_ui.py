@@ -253,7 +253,12 @@ class Launcher:
         return True
 
     def check_build_tools(self) -> bool:
-        missing = [x for x in ("cmake", "ninja", "clang++") if not shutil.which(x)]
+        missing = []
+        for name in ("cmake", "ninja", "clang++"):
+            try:
+                core.check_tool(name)
+            except RuntimeError:
+                missing.append(name)
         if missing:
             error("These build tools are missing:\n\n  " + "\n  ".join(missing) +
                   "\n\nInstall them with your package manager "

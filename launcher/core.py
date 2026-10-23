@@ -182,12 +182,30 @@ def find_gl_include(override: str | None = None) -> Path | None:
     return None
 
 
+def bundled_tool(name: str) -> str | None:
+    """The CMake/Ninja copy carried by the AppImage or Windows package."""
+    root = bundle_root()
+    exe = name + (".exe" if os.name == "nt" else "")
+    if name == "cmake":
+        candidates = [root / "deps" / "cmake" / "bin" / exe,
+                      root / "tools" / "cmake" / "bin" / exe]
+    elif name == "ninja":
+        candidates = [root / "deps" / exe, root / "deps" / "ninja" / exe,
+                      root / "tools" / exe]
+    else:
+        candidates = []
+    for p in candidates:
+        if p.is_file():
+            return str(p)
+    return None
+
+
 def check_tool(name: str, override: str | None = None) -> str:
     if override:
         return override
-    p = shutil.which(name)
+    p = bundled_tool(name) or shutil.which(name)
     if not p:
-        raise RuntimeError(f"{name} was not found on PATH")
+        raise RuntimeError(f"{name} was not found (the bundled copy is missing too)")
     return p
 
 
@@ -217,6 +235,11 @@ def run(cmd: list[str], log: Path, env: dict | None = None, cwd: Path | None = N
 def build_env(project: Path, sdl3: Path, gl_include: Path | None) -> dict:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(project) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    # Let CMake find a bundled Ninja (it only searches PATH for the generator).
+    tool_dirs = [str(d) for d in (bundle_root() / "deps" / "cmake" / "bin",
+                                  bundle_root() / "deps") if d.is_dir()]
+    if tool_dirs:
+        env["PATH"] = os.pathsep.join(tool_dirs) + os.pathsep + env.get("PATH", "")
     if os.name == "nt":
         env["CMAKE_PREFIX_PATH"] = str(sdl3) + (os.pathsep + env["CMAKE_PREFIX_PATH"] if env.get("CMAKE_PREFIX_PATH") else "")
         for p in (sdl3 / "bin", sdl3 / "lib"):
@@ -304,6 +327,7 @@ def build(iso: str, work: str, *, source: str | None = None, log_path: str | Non
     if gl:
         flags += f' -I"{gl}"'
     cm_args = [cmake, "-S", str(recomp), "-B", str(builddir), "-G", "Ninja",
+               f"-DCMAKE_MAKE_PROGRAM={ninja}",
                f"-DCMAKE_CXX_COMPILER={cxx}", "-DCMAKE_BUILD_TYPE=Release",
                f"-DCMAKE_CXX_FLAGS_RELEASE={flags}",
                f"-DWIIKIT_EXTRA={project / 'tools' / 'crbr.cmake'}"]

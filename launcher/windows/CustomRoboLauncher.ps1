@@ -38,18 +38,119 @@ function Save-Settings {
     $obj | ConvertTo-Json | Set-Content -Encoding UTF8 $script:SettingsFile
 }
 
-function Find-Python {
-    $p = Get-Command python -ErrorAction SilentlyContinue
-    if ($p) {
-        $exe = $p.Path
-        if (-not $exe) { $exe = $p.Source }
-        return [pscustomobject]@{ Exe = $exe; Prefix = @() }
+function Test-Python([string]$Exe, [string[]]$Prefix) {
+    $a = @()
+    if ($Prefix) { $a += $Prefix }
+    $a += @("-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)")
+    try {
+        & $Exe @a 2>$null | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
     }
+}
+
+function Find-Python {
+    # The py launcher is the most reliable on Windows; python.exe can be the
+    # Microsoft Store alias, which opens the Store instead of running Python.
     $p = Get-Command py -ErrorAction SilentlyContinue
     if ($p) {
         $exe = $p.Path
         if (-not $exe) { $exe = $p.Source }
-        return [pscustomobject]@{ Exe = $exe; Prefix = @("-3") }
+        if ($exe -and (Test-Python $exe @("-3"))) {
+            return [pscustomobject]@{ Exe = $exe; Prefix = @("-3") }
+        }
+    }
+    foreach ($name in @("python", "python3")) {
+        $p = Get-Command $name -ErrorAction SilentlyContinue
+        if ($p) {
+            $exe = $p.Path
+            if (-not $exe) { $exe = $p.Source }
+            if ($exe -and (Test-Python $exe @())) {
+                return [pscustomobject]@{ Exe = $exe; Prefix = @() }
+            }
+        }
+    }
+    $local = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python313\python.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python312\python.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python311\python.exe"),
+        "C:\Python313\python.exe",
+        "C:\Python312\python.exe",
+        "C:\Python311\python.exe"
+    )
+    foreach ($exe in $local) {
+        if ($exe -and (Test-Path -LiteralPath $exe) -and (Test-Python $exe @())) {
+            return [pscustomobject]@{ Exe = $exe; Prefix = @() }
+        }
+    }
+    return $null
+}
+
+function Install-Python {
+    $existing = Find-Python
+    if ($existing) {
+        [System.Windows.Forms.MessageBox]::Show(
+            "Python is already installed:`r`n$($existing.Exe)",
+            "Custom Robo") | Out-Null
+        return
+    }
+
+    $script:lblStatus.Text = "Installing Python 3.12..."
+    $installed = $false
+
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        try {
+            $wgArgs = @("install", "--id", "Python.Python.3.12", "-e",
+                        "--source", "winget", "--accept-package-agreements",
+                        "--accept-source-agreements", "--silent")
+            $p = Start-Process -FilePath $winget.Source -ArgumentList $wgArgs `
+                -Wait -PassThru -WindowStyle Hidden
+            if ($p.ExitCode -eq 0 -and (Find-Python)) { $installed = $true }
+        } catch { }
+    }
+
+    if (-not $installed) {
+        try {
+            $url = "https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe"
+            $out = Join-Path $env:TEMP "python-3.12.10-amd64.exe"
+            $script:lblStatus.Text = "Downloading Python 3.12..."
+            Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing
+            $script:lblStatus.Text = "Installing Python 3.12..."
+            $p = Start-Process -FilePath $out -Wait -PassThru -ArgumentList `
+                "/passive InstallAllUsers=0 PrependPath=1 Include_launcher=1 Include_test=0"
+            if ($p.ExitCode -eq 0 -and (Find-Python)) { $installed = $true }
+        } catch { }
+    }
+
+    $py = Find-Python
+    if ($py) {
+        $script:lblStatus.Text = "Python installed. Press Build."
+        [System.Windows.Forms.MessageBox]::Show(
+            "Python is ready:`r`n$($py.Exe)`r`n`r`nPress Build to continue.",
+            "Custom Robo") | Out-Null
+    } else {
+        $script:lblStatus.Text = "Python install did not finish."
+        [System.Windows.Forms.MessageBox]::Show(
+            "Python could not be installed automatically.`r`n`r`n" +
+            "Install Python 3.10 or newer from python.org, tick `"Add Python to PATH`", " +
+            "then restart the launcher.",
+            "Custom Robo") | Out-Null
+    }
+}
+
+function Ensure-Python {
+    $py = Find-Python
+    if ($py) { return $py }
+    $answer = [System.Windows.Forms.MessageBox]::Show(
+        "Python 3.10 or newer is required to build and run the game.`r`n`r`n" +
+        "Install it now?",
+        "Custom Robo", [System.Windows.Forms.MessageBoxButtons]::YesNo,
+        [System.Windows.Forms.MessageBoxIcon]::Question)
+    if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) {
+        Install-Python
+        return (Find-Python)
     }
     return $null
 }
@@ -155,6 +256,13 @@ $btnCancel.Enabled = $false
 $btnCancel.Add_Click({ Cancel-Build })
 $form.Controls.Add($btnCancel)
 
+$btnPython = New-Object System.Windows.Forms.Button
+$btnPython.Text = "Install Python"
+$btnPython.Location = New-Object System.Drawing.Point(572, 172)
+$btnPython.Size = New-Object System.Drawing.Size(120, 30)
+$btnPython.Add_Click({ Install-Python })
+$form.Controls.Add($btnPython)
+
 $script:progress = New-Object System.Windows.Forms.ProgressBar
 $script:progress.Location = New-Object System.Drawing.Point(112, 214)
 $script:progress.Size = New-Object System.Drawing.Size(686, 16)
@@ -167,6 +275,9 @@ $script:lblStatus.Location = New-Object System.Drawing.Point(112, 234)
 $script:lblStatus.Size = New-Object System.Drawing.Size(686, 22)
 $script:lblStatus.Anchor = "Top,Left,Right"
 $form.Controls.Add($script:lblStatus)
+if (-not (Find-Python)) {
+    $script:lblStatus.Text = "Python 3 is not installed. Press Install Python."
+}
 
 $script:txtLog = New-Object System.Windows.Forms.TextBox
 $script:txtLog.Multiline = $true
@@ -257,13 +368,8 @@ function Start-Build {
         [System.Windows.Forms.MessageBox]::Show("launcher\core.py is missing from this package.", "Custom Robo") | Out-Null
         return
     }
-    $py = Find-Python
-    if (-not $py) {
-        [System.Windows.Forms.MessageBox]::Show(
-            "Python 3 was not found on PATH.`r`n`r`nInstall Python 3.10 or newer from python.org and tick 'Add Python to PATH'.",
-            "Custom Robo") | Out-Null
-        return
-    }
+    $py = Ensure-Python
+    if (-not $py) { return }
     New-Item -ItemType Directory -Force -Path $work | Out-Null
     Save-Settings
 
@@ -346,11 +452,8 @@ function Start-Game {
         [System.Windows.Forms.MessageBox]::Show("The game has not been built yet. Press Build first.", "Custom Robo") | Out-Null
         return
     }
-    $py = Find-Python
-    if (-not $py) {
-        [System.Windows.Forms.MessageBox]::Show("Python 3 was not found on PATH.", "Custom Robo") | Out-Null
-        return
-    }
+    $py = Ensure-Python
+    if (-not $py) { return }
     $env:CUSTOM_ROBO_BUNDLE = $script:Root
     $env:CUSTOM_ROBO_PROJECT = $script:ProjectRoot
     $env:PYTHONPATH = $script:ProjectRoot

@@ -28,7 +28,8 @@ mkdir -p "$APPDIR/usr/bin" \
          "$APPDIR/usr/share/applications" \
          "$APPDIR/usr/share/icons/hicolor/256x256/apps" \
          "$APPDIR/usr/share/custom-robo/launcher" \
-         "$APPDIR/usr/share/custom-robo/project"
+         "$APPDIR/usr/share/custom-robo/project" \
+         "$APPDIR/usr/share/custom-robo/deps"
 
 cp -a "$ROOT/wiikit" "$APPDIR/usr/share/custom-robo/project/wiikit"
 rm -rf "$APPDIR/usr/share/custom-robo/project/wiikit/.git"
@@ -50,6 +51,19 @@ cp -a "$SDL3" "$APPDIR/usr/share/custom-robo/sdl3"
 mkdir -p "$APPDIR/usr/share/custom-robo/gl"
 cp -a "$GL/include" "$APPDIR/usr/share/custom-robo/gl/"
 find "$APPDIR/usr/share/custom-robo/sdl3" -name '__pycache__' -type d -prune -exec rm -rf {} + || true
+
+echo "== bundling CMake and Ninja"
+"$ROOT/launcher/fetch-tools.sh" linux
+mkdir -p "$APPDIR/usr/share/custom-robo/deps/cmake"
+mkdir -p "$APPDIR/usr/share/custom-robo/deps/cmake/bin"
+cp "$ROOT/build/tools/cmake-linux/bin/cmake" "$APPDIR/usr/share/custom-robo/deps/cmake/bin/cmake"
+cp -a "$ROOT/build/tools/cmake-linux/share" "$APPDIR/usr/share/custom-robo/deps/cmake/"
+[ -f "$ROOT/build/tools/cmake-linux/COPYING-CMAKE.txt" ] && \
+    cp "$ROOT/build/tools/cmake-linux/COPYING-CMAKE.txt" "$APPDIR/usr/share/custom-robo/deps/cmake/"
+cp "$ROOT/build/tools/ninja-linux/ninja" "$APPDIR/usr/share/custom-robo/deps/ninja"
+chmod 755 "$APPDIR/usr/share/custom-robo/deps/ninja"
+[ -f "$ROOT/build/tools/ninja-linux/COPYING-NINJA.txt" ] && \
+    cp "$ROOT/build/tools/ninja-linux/COPYING-NINJA.txt" "$APPDIR/usr/share/custom-robo/deps/"
 
 echo "== icon and desktop entry"
 cp "$ROOT/launcher/appimage/custom-robo.svg" "$APPDIR/custom-robo.svg"

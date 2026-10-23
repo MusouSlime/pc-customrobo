@@ -4,19 +4,54 @@ if [ -z "${APPDIR:-}" ]; then
     APPDIR="$(cd "$(dirname "$0")/../.." && pwd)"
     export APPDIR
 fi
+
+dialog_question() {
+    if command -v zenity >/dev/null 2>&1; then
+        zenity --question --title "Custom Robo" --text "$1"
+    elif command -v yad >/dev/null 2>&1; then
+        yad --question --title "Custom Robo" --text "$1"
+    else
+        return 1
+    fi
+}
+
+dialog_error() {
+    if command -v zenity >/dev/null 2>&1; then
+        zenity --error --title "Custom Robo" --text "$1"
+    elif command -v yad >/dev/null 2>&1; then
+        yad --error --title "Custom Robo" --text "$1"
+    fi
+}
+
+install_python() {
+    command -v pkexec >/dev/null 2>&1 || return 1
+    if command -v apt-get >/dev/null 2>&1; then
+        pkexec apt-get install -y python3
+    elif command -v dnf >/dev/null 2>&1; then
+        pkexec dnf install -y python3
+    elif command -v pacman >/dev/null 2>&1; then
+        pkexec pacman -S --noconfirm python
+    elif command -v zypper >/dev/null 2>&1; then
+        pkexec zypper --non-interactive install python3
+    elif command -v apk >/dev/null 2>&1; then
+        pkexec apk add python3
+    else
+        return 1
+    fi
+}
+
 PYTHON="${PYTHON:-python3}"
 if ! command -v "$PYTHON" >/dev/null 2>&1; then
-    if command -v zenity >/dev/null 2>&1; then
-        zenity --error --title "Custom Robo" \
-            --text "Python 3 is required to run this launcher."
+    if dialog_question "Python 3 is required to run this launcher.\n\nInstall it now with your package manager?"; then
+        install_python || true
     fi
-    exit 1
+    if ! command -v "$PYTHON" >/dev/null 2>&1; then
+        dialog_error "Python 3 is required but was not installed.\n\nInstall python3 with your package manager, then start the launcher again."
+        exit 1
+    fi
 fi
 if ! "$PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
-    if command -v zenity >/dev/null 2>&1; then
-        zenity --error --title "Custom Robo" \
-            --text "Python 3.10 or newer is required (found $("$PYTHON" -V 2>&1))."
-    fi
+    dialog_error "Python 3.10 or newer is required (found $("$PYTHON" -V 2>&1))."
     exit 1
 fi
 exec "$PYTHON" "$APPDIR/usr/share/custom-robo/launcher/linux_ui.py" "$@"

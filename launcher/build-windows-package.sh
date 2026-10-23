@@ -35,6 +35,17 @@ find "$PKG/project" -name '*.pyc' -delete
 
 cp -a "$GL/include" "$PKG/deps/gl/include"
 
+echo "== bundling CMake and Ninja"
+"$ROOT/launcher/fetch-tools.sh" windows
+mkdir -p "$PKG/deps/cmake/bin"
+cp "$ROOT/build/tools/cmake-windows/bin/cmake.exe" "$PKG/deps/cmake/bin/cmake.exe"
+cp -a "$ROOT/build/tools/cmake-windows/share" "$PKG/deps/cmake/"
+[ -f "$ROOT/build/tools/cmake-windows/COPYING-CMAKE.txt" ] && \
+    cp "$ROOT/build/tools/cmake-windows/COPYING-CMAKE.txt" "$PKG/deps/cmake/"
+cp "$ROOT/build/tools/ninja-windows/ninja.exe" "$PKG/deps/ninja.exe"
+[ -f "$ROOT/build/tools/ninja-windows/COPYING-NINJA.txt" ] && \
+    cp "$ROOT/build/tools/ninja-windows/COPYING-NINJA.txt" "$PKG/deps/"
+
 # Keep the source tree's executable bits from leaking into odd places; the
 # .cmd and .ps1 are launched explicitly by Windows.
 echo "== packaging $ZIP"
