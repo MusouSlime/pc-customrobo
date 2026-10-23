@@ -327,6 +327,28 @@ def build(iso: str, work: str, *, source: str | None = None, log_path: str | Non
          "--symbols", str(names), "--hooks", str(project / "tools" / "crbr-hooks.txt")],
         log, env, project)
 
+    # A launcher package can be moved between builds. CMake refuses to change
+    # the compiler in an existing cache, so discard it when the bundled path
+    # (or the Ninja path) is different.
+    cache = builddir / "CMakeCache.txt"
+    if cache.is_file():
+        def cache_path(key: str) -> str | None:
+            for line in cache.read_text(encoding="utf-8", errors="replace").splitlines():
+                if line.startswith(key + ":FILEPATH="):
+                    return line.split("=", 1)[1]
+            return None
+
+        def same_path(a: str, b: str) -> bool:
+            return (os.path.normcase(os.path.normpath(a)).replace("\\", "/") ==
+                    os.path.normcase(os.path.normpath(b)).replace("\\", "/"))
+
+        old_cxx = cache_path("CMAKE_CXX_COMPILER")
+        old_ninja = cache_path("CMAKE_MAKE_PROGRAM")
+        if ((old_cxx and not same_path(old_cxx, cxx)) or
+                (old_ninja and not same_path(old_ninja, ninja))):
+            _append(log, "\n== discarding the CMake cache: the toolchain path changed\n")
+            shutil.rmtree(builddir, ignore_errors=True)
+
     step("Configuring the native build")
     flags = "-O1"
     if gl:
