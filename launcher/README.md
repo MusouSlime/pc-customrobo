@@ -68,7 +68,9 @@ SDL3. Only Dolphin's `Sys\GC` fonts and your disc image are external. The
 
 The Windows build path in wiikit exists, but has had less testing than the
 Linux one. If a build fails, the launcher's log panel shows the failing
-command; that is the place to start.
+command; that is the place to start. The form's **Diagnose** button runs the
+game with disc-read logging, an EFB dump, and GL debug output, then packages
+the logs and PNGs when the game exits.
 
 ## Shared command line
 

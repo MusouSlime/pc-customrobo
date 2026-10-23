@@ -269,6 +269,13 @@ $btnPython.Size = New-Object System.Drawing.Size(120, 30)
 $btnPython.Add_Click({ Install-Python })
 $form.Controls.Add($btnPython)
 
+$btnDiag = New-Object System.Windows.Forms.Button
+$btnDiag.Text = "Diagnose"
+$btnDiag.Location = New-Object System.Drawing.Point(702, 172)
+$btnDiag.Size = New-Object System.Drawing.Size(100, 30)
+$btnDiag.Add_Click({ Start-Diagnose })
+$form.Controls.Add($btnDiag)
+
 $script:chkUnlock = New-Object System.Windows.Forms.CheckBox
 $script:chkUnlock.Text = "Unlock all robos, parts and stages"
 $script:chkUnlock.Location = New-Object System.Drawing.Point(112, 208)
@@ -276,6 +283,12 @@ $script:chkUnlock.Size = New-Object System.Drawing.Size(320, 24)
 $script:chkUnlock.Checked = -not (@("0", "false", "False") -contains (Get-Setting "unlock" "1"))
 $script:chkUnlock.Add_CheckedChanged({ Save-Settings })
 $form.Controls.Add($script:chkUnlock)
+
+$script:chkWhite = New-Object System.Windows.Forms.CheckBox
+$script:chkWhite.Text = "Force white shaders (diagnose)"
+$script:chkWhite.Location = New-Object System.Drawing.Point(450, 208)
+$script:chkWhite.Size = New-Object System.Drawing.Size(340, 24)
+$form.Controls.Add($script:chkWhite)
 
 $script:progress = New-Object System.Windows.Forms.ProgressBar
 $script:progress.Location = New-Object System.Drawing.Point(112, 240)
@@ -307,6 +320,10 @@ $form.Controls.Add($script:txtLog)
 $script:Timer = New-Object System.Windows.Forms.Timer
 $script:Timer.Interval = 500
 $script:Timer.Add_Tick({ Refresh-Build })
+$script:DiagProc = $null
+$script:DiagTimer = New-Object System.Windows.Forms.Timer
+$script:DiagTimer.Interval = 500
+$script:DiagTimer.Add_Tick({ Check-Diagnose })
 $script:Proc = $null
 $script:Building = $false
 
@@ -456,6 +473,121 @@ function Cancel-Build {
     Set-Busy $false
     $script:lblStatus.Text = "Build cancelled."
     $script:Proc = $null
+}
+
+function Save-Diagnostics([string]$Work) {
+    $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $zip = Join-Path $Work "CustomRobo-diagnostics-$stamp.zip"
+    $files = @()
+    foreach ($name in @("build.log", "run.log", "keys.txt", "crash.log",
+                        "launcher-stdout.txt", "launcher-stderr.txt",
+                        "launcher-run.txt", "launcher-run-error.txt",
+                        "diagnose-stdout.txt", "diagnose-stderr.txt")) {
+        $p = Join-Path $Work $name
+        if (Test-Path -LiteralPath $p) { $files += $p }
+    }
+    $files += @(Get-ChildItem -LiteralPath $Work -Filter "efb_*.png" -File -ErrorAction SilentlyContinue |
+                ForEach-Object { $_.FullName })
+    $files += @(Get-ChildItem -LiteralPath $Work -Filter "frame_*.png" -File -ErrorAction SilentlyContinue |
+                ForEach-Object { $_.FullName })
+    if ($files.Count -eq 0) { return $null }
+    try {
+        Compress-Archive -LiteralPath $files -DestinationPath $zip -Force -ErrorAction Stop
+        return $zip
+    } catch {
+        return $null
+    }
+}
+
+function Check-Diagnose {
+    if (-not $script:DiagProc) { return }
+    if (-not $script:DiagProc.HasExited) { return }
+    $code = $script:DiagProc.ExitCode
+    $script:DiagProc = $null
+    $script:DiagTimer.Stop()
+    $script:lblStatus.Text = "Diagnostics finished (exit $code); saving..."
+    $work = $script:txtWork.Text.Trim()
+    $zip = Save-Diagnostics $work
+    if ($zip) {
+        $script:lblStatus.Text = "Diagnostics saved."
+        [System.Windows.Forms.MessageBox]::Show(
+            "Diagnostics saved:`r`n$zip`r`n`r`nGame exit code: $code",
+            "Custom Robo") | Out-Null
+        Start-Process explorer.exe -ArgumentList "/select,`"$zip`""
+    } else {
+        $script:lblStatus.Text = "Diagnostics finished; no files were saved."
+        [System.Windows.Forms.MessageBox]::Show(
+            "The game exited with code $code, but no diagnostic files were found in:`r`n$work",
+            "Custom Robo") | Out-Null
+    }
+}
+
+function Start-Diagnose {
+    if ($script:Building) { return }
+    if ($script:DiagProc) {
+        [System.Windows.Forms.MessageBox]::Show("A diagnostic run is already active.",
+            "Custom Robo") | Out-Null
+        return
+    }
+    $work = $script:txtWork.Text.Trim()
+    $exe = Join-Path $work "recomp-build\wiiboot.exe"
+    if (-not (Test-Path $exe)) {
+        [System.Windows.Forms.MessageBox]::Show("The game has not been built yet. Press Build first.",
+            "Custom Robo") | Out-Null
+        return
+    }
+    $py = Ensure-Python
+    if (-not $py) { return }
+    New-Item -ItemType Directory -Force -Path $work | Out-Null
+    Save-Settings
+
+    $env:CUSTOM_ROBO_BUNDLE = $script:Root
+    $env:CUSTOM_ROBO_PROJECT = $script:ProjectRoot
+    $env:PYTHONPATH = $script:ProjectRoot
+    if ($script:txtSdl3.Text.Trim()) { $env:SDL3_DIR = $script:txtSdl3.Text.Trim() }
+    if ($script:txtFonts.Text.Trim()) { $env:CUSTOM_ROBO_FONTS = $script:txtFonts.Text.Trim() }
+
+    $out = Join-Path $work "diagnose-stdout.txt"
+    $err = Join-Path $work "diagnose-stderr.txt"
+    Remove-Item -Force -ErrorAction SilentlyContinue $out, $err
+
+    $argv = @()
+    $argv += $py.Prefix
+    $argv += @($script:CorePath, "run", "--work", $work)
+    if ($script:chkUnlock.Checked) { $argv += "--unlock" } else { $argv += "--no-unlock" }
+    if ($script:txtSdl3.Text.Trim()) { $argv += @("--sdl3", $script:txtSdl3.Text.Trim()) }
+    $line = (($argv | ForEach-Object { Format-Arg $_ }) -join " ")
+
+    $diag = @{
+        WIIKIT_DISCLOG = "1"
+        WIIKIT_EFBDUMP = "120"
+        WIIKIT_EFBDUMP_EVERY = "0"
+        WIIKIT_EFBDUMP_STRIDE = "0"
+        WIIKIT_GLDEBUG = "1"
+    }
+    if ($script:chkWhite.Checked) { $diag["WIIKIT_FORCEWHITE"] = "1" }
+    $saved = @{}
+    foreach ($key in $diag.Keys) {
+        $saved[$key] = [Environment]::GetEnvironmentVariable($key, "Process")
+        [Environment]::SetEnvironmentVariable($key, $diag[$key], "Process")
+    }
+    try {
+        $script:DiagProc = Start-Process -FilePath $py.Exe -ArgumentList $line `
+            -WorkingDirectory $script:Root -NoNewWindow -PassThru `
+            -RedirectStandardOutput $out -RedirectStandardError $err
+    } catch {
+        $script:DiagProc = $null
+        [System.Windows.Forms.MessageBox]::Show("Could not start the diagnostic run:`r`n`r`n$_",
+            "Custom Robo") | Out-Null
+    } finally {
+        foreach ($key in $diag.Keys) {
+            [Environment]::SetEnvironmentVariable($key, $saved[$key], "Process")
+        }
+    }
+    if ($script:DiagProc) {
+        $script:DiagTimer.Start()
+        $script:lblStatus.Text = "Diagnostics running. Close the game when you are done."
+    }
 }
 
 function Start-Game {

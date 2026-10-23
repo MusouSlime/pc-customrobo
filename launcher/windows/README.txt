@@ -41,6 +41,18 @@ Notes
   * The launcher never uploads or includes your disc image. The working
     folder contains files extracted from it; keep it private.
 
+Diagnostics
+-----------
+Press **Diagnose** to start the game with:
+  * disc-file read logging
+  * an EFB PNG at frame 120
+  * OpenGL debug messages
+  * optional **Force white shaders** for a black-screen test
+
+Close the game when done. The launcher then writes
+`CustomRobo-diagnostics-<date>.zip` in the working folder and opens it in
+Explorer with the zip selected.
+
 Folder layout
 -------------
   Custom Robo Launcher.cmd
