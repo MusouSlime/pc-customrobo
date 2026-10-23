@@ -1,45 +1,33 @@
 Custom Robo: Battle Revolution — Windows launcher
 ==================================================
 
-This is a thin launcher. It does not contain the game, a compiler, or SDL3.
-It takes YOUR legally owned Custom Robo (USA) disc image, recompiles the
-game for this PC with the tools below, and then runs the result.
+This package is self-contained for building the game. It takes YOUR legally
+owned Custom Robo (USA) disc image, recompiles the game for this PC with the
+tools in this folder, and then runs the result.
 
 Start it with "Custom Robo Launcher.cmd".
 
 What you need
 -------------
   * Windows 10 or 11, 64-bit
-  * Python 3.10 or newer. The launcher has an "Install Python" button that
-    uses winget or the official python.org installer.
-  * A C++ toolchain: clang++ with a working linker
-  * The SDL3 development package for the same toolchain
-  * Dolphin installed once (the launcher needs its Sys\GC files:
-    font_western.bin, font_japanese.bin, dsp_coef.bin)
+  * Your Custom Robo (USA) disc image
+  * Dolphin installed once, for its Sys\GC files:
+    font_western.bin, font_japanese.bin, dsp_coef.bin
 
-CMake and Ninja are bundled in this package; you do not need to install them.
+No MSYS2, Visual Studio, Python, CMake, Ninja or SDL3 installation is needed.
+The package carries:
 
-Recommended: MSYS2 (UCRT64)
----------------------------
-  1. Install MSYS2 from https://www.msys2.org/
-  2. Open "MSYS2 UCRT64" and run:
+  * Python 3.12 (embeddable)
+  * clang 23 / llvm-mingw, UCRT x86_64
+  * SDL3 3.4.18 development files and SDL3.dll
+  * CMake 3.31.6
+  * Ninja 1.12.1
+  * The OpenGL headers
 
-       pacman -Syu
-       pacman -S mingw-w64-ucrt-x86_64-clang \
-                 mingw-w64-ucrt-x86_64-SDL3
-
-  3. Start "Custom Robo Launcher.cmd" from that same MSYS2 UCRT64 shell.
-  4. In the launcher, set "SDL3 folder" to C:\msys64\ucrt64.
-     (The launcher checks lib\cmake\SDL3 and cmake\SDL3.)
-
-Python can come from MSYS2 (`pacman -S python`) or from the launcher's
-"Install Python" button. If you use the button, restart the launcher if the
-status still says Python is missing; a new process sees the updated PATH.
-
-If you use Visual Studio's LLVM/clang, install the SDL3 VC development
-package and choose the folder that contains cmake\SDL3. Run the launcher
-from an "x64 Native Tools Command Prompt for VS" so the compiler and linker
-environment is set up.
+The launcher runs `launcher\core.py` with `deps\python\python.exe`, uses
+`deps\llvm-mingw\bin\clang++.exe`, and points CMake at `deps\sdl3`. The
+"Install Python" button remains available if you prefer a system Python, but
+the bundled copy is used first.
 
 Notes
 -----
@@ -47,8 +35,9 @@ Notes
     than the Linux build. If compilation fails, the log panel shows the exact
     command and error; that is the place to start.
   * Saves are written under the working folder in memcard\A.raw.
-  * All content is unlocked by default. Set CRBR_UNLOCK=0 before Run to use
-    normal progression.
+  * The **Unlock all robos, parts and stages** checkbox is on by default.
+    Turn it off before Run for normal progression; `CRBR_UNLOCK=0` does the
+    same if you run `core.py` directly.
   * The launcher never uploads or includes your disc image. The working
     folder contains files extracted from it; keep it private.
 
@@ -59,6 +48,11 @@ Folder layout
   launcher\windows\...              this GUI
   project\wiikit\                   static recompiler and runtime
   project\tools\                    port hooks and build files
+  deps\python\                      bundled Python 3.12
+  deps\llvm-mingw\                  bundled clang + UCRT sysroot
+  deps\sdl3\                        bundled SDL3 development files
   deps\cmake\                       bundled CMake
   deps\ninja.exe                    bundled Ninja
   deps\gl\include\GL\               OpenGL headers for the runtime
+
+Third-party licenses are next to their components under deps\.

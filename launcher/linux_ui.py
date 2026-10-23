@@ -194,10 +194,11 @@ class Launcher:
         self.sdl3 = self.settings.get("sdl3") or ""
         if self.sdl3 and not Path(self.sdl3).is_dir():
             self.sdl3 = ""
+        self.unlock = bool(self.settings.get("unlock", True))
 
     def save(self) -> None:
-        self.settings.update(work=self.work, iso=self.iso,
-                             fonts=self.fonts, sdl3=self.sdl3)
+        self.settings.update(work=self.work, iso=self.iso, fonts=self.fonts,
+                             sdl3=self.sdl3, unlock=self.unlock)
         core.save_settings(self.settings)
 
     # -- settings ----------------------------------------------------------
@@ -253,19 +254,70 @@ class Launcher:
         return True
 
     def check_build_tools(self) -> bool:
-        missing = []
-        for name in ("cmake", "ninja", "clang++"):
-            try:
-                core.check_tool(name)
-            except RuntimeError:
-                missing.append(name)
+        def missing_tools() -> list[str]:
+            missing = []
+            for name in ("cmake", "ninja", "clang++"):
+                try:
+                    core.check_tool(name)
+                except RuntimeError:
+                    missing.append(name)
+            return missing
+
+        missing = missing_tools()
+        if missing and "clang++" in missing and ask(
+                "clang++ is missing. It is the only compiler the port supports "
+                "on Linux.\n\nInstall it now with your package manager?"):
+            self.install_compiler()
+            missing = missing_tools()
         if missing:
             error("These build tools are missing:\n\n  " + "\n  ".join(missing) +
-                  "\n\nInstall them with your package manager "
-                  "(for Bazzite: rpm-ostree install cmake ninja-build clang), "
+                  "\n\nCMake and Ninja are bundled; if they are missing, the "
+                  "launcher package is incomplete. Install clang++ with your "
+                  "package manager (for Bazzite: rpm-ostree install clang), "
                   "then start the launcher again.")
             return False
         return True
+
+    def install_compiler(self) -> bool:
+        try:
+            info(f"clang++ is already installed:\n{core.check_tool('clang++')}")
+            return True
+        except RuntimeError:
+            pass
+        managers = [
+            ("apt-get", ["install", "-y", "clang"]),
+            ("dnf", ["install", "-y", "clang"]),
+            ("pacman", ["-S", "--noconfirm", "clang"]),
+            ("zypper", ["--non-interactive", "install", "clang"]),
+            ("apk", ["add", "clang"]),
+            ("rpm-ostree", ["install", "clang"]),
+        ]
+        if not shutil.which("pkexec"):
+            error("Installing clang needs pkexec for the administrator prompt.\n\n"
+                  "Install clang++ with your package manager, then try again.")
+            return False
+        for manager, args in managers:
+            if not shutil.which(manager):
+                continue
+            prog = Progress(f"Installing clang with {manager}...")
+            try:
+                r = subprocess.run(["pkexec", manager, *args],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except OSError as e:
+                prog.finish()
+                error(str(e))
+                return False
+            prog.finish()
+            if r.returncode == 0:
+                if manager == "rpm-ostree":
+                    info("clang was layered into the system.\n\n"
+                         "Reboot, then start the launcher and build again.")
+                return True
+            error(f"{manager} could not install clang.")
+            return False
+        error("No supported package manager was found.\n\n"
+              "Install clang++ manually, then start the launcher again.")
+        return False
 
     # -- actions -----------------------------------------------------------
     def build(self) -> None:
@@ -304,7 +356,8 @@ class Launcher:
             return
         try:
             core.install_fonts(Path(self.work), Path(self.fonts) if self.fonts else None)
-            core.run_game(self.work, sdl3=self.sdl3 or None, detached=True)
+            core.run_game(self.work, sdl3=self.sdl3 or None, detached=True,
+                          unlock=self.unlock)
         except Exception as e:  # noqa: BLE001
             error(str(e))
             return
@@ -326,11 +379,14 @@ class Launcher:
                   "Install one of them and try again.")
             return 1
         while True:
+            unlock_label = "Unlocks: on (toggle)" if self.unlock else "Unlocks: off (toggle)"
             choice = menu([
                 "Build from disc image",
                 "Run game",
                 "Choose working folder",
                 "Install console fonts from Dolphin",
+                "Install compiler (clang)",
+                unlock_label,
                 "Open working folder",
                 "Quit",
             ], f"Disc image: {self.iso or '(not chosen)'}\n"
@@ -347,6 +403,11 @@ class Launcher:
                 self.choose_work()
             elif choice == "Install console fonts from Dolphin":
                 self.choose_fonts()
+            elif choice == "Install compiler (clang)":
+                self.install_compiler()
+            elif choice == unlock_label:
+                self.unlock = not self.unlock
+                self.save()
             elif choice == "Open working folder":
                 self.open_work()
         return 0

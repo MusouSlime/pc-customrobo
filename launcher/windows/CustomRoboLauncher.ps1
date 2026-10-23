@@ -30,10 +30,11 @@ function Get-Setting([string]$Name, [string]$Default) {
 function Save-Settings {
     New-Item -ItemType Directory -Force -Path $script:SettingsDir | Out-Null
     $obj = [pscustomobject]@{
-        iso   = $script:txtIso.Text
-        work  = $script:txtWork.Text
-        fonts = $script:txtFonts.Text
-        sdl3  = $script:txtSdl3.Text
+        iso    = $script:txtIso.Text
+        work   = $script:txtWork.Text
+        fonts  = $script:txtFonts.Text
+        sdl3   = $script:txtSdl3.Text
+        unlock = if ($script:chkUnlock.Checked) { "1" } else { "0" }
     }
     $obj | ConvertTo-Json | Set-Content -Encoding UTF8 $script:SettingsFile
 }
@@ -51,6 +52,11 @@ function Test-Python([string]$Exe, [string[]]$Prefix) {
 }
 
 function Find-Python {
+    # The package ships an embeddable Python, so a clean PC needs no install.
+    $bundled = Join-Path $script:Root "deps\python\python.exe"
+    if ((Test-Path -LiteralPath $bundled) -and (Test-Python $bundled @())) {
+        return [pscustomobject]@{ Exe = $bundled; Prefix = @() }
+    }
     # The py launcher is the most reliable on Windows; python.exe can be the
     # Microsoft Store alias, which opens the Store instead of running Python.
     $p = Get-Command py -ErrorAction SilentlyContinue
@@ -263,15 +269,23 @@ $btnPython.Size = New-Object System.Drawing.Size(120, 30)
 $btnPython.Add_Click({ Install-Python })
 $form.Controls.Add($btnPython)
 
+$script:chkUnlock = New-Object System.Windows.Forms.CheckBox
+$script:chkUnlock.Text = "Unlock all robos, parts and stages"
+$script:chkUnlock.Location = New-Object System.Drawing.Point(112, 208)
+$script:chkUnlock.Size = New-Object System.Drawing.Size(320, 24)
+$script:chkUnlock.Checked = ((Get-Setting "unlock" "1") -ne "0")
+$script:chkUnlock.Add_CheckedChanged({ Save-Settings })
+$form.Controls.Add($script:chkUnlock)
+
 $script:progress = New-Object System.Windows.Forms.ProgressBar
-$script:progress.Location = New-Object System.Drawing.Point(112, 214)
+$script:progress.Location = New-Object System.Drawing.Point(112, 240)
 $script:progress.Size = New-Object System.Drawing.Size(686, 16)
 $script:progress.Anchor = "Top,Left,Right"
 $form.Controls.Add($script:progress)
 
 $script:lblStatus = New-Object System.Windows.Forms.Label
 $script:lblStatus.Text = "Choose your disc image, then press Build."
-$script:lblStatus.Location = New-Object System.Drawing.Point(112, 234)
+$script:lblStatus.Location = New-Object System.Drawing.Point(112, 260)
 $script:lblStatus.Size = New-Object System.Drawing.Size(686, 22)
 $script:lblStatus.Anchor = "Top,Left,Right"
 $form.Controls.Add($script:lblStatus)
@@ -285,8 +299,8 @@ $script:txtLog.ReadOnly = $true
 $script:txtLog.ScrollBars = "Both"
 $script:txtLog.WordWrap = $false
 $script:txtLog.Font = New-Object System.Drawing.Font("Consolas", 8.5)
-$script:txtLog.Location = New-Object System.Drawing.Point(12, 264)
-$script:txtLog.Size = New-Object System.Drawing.Size(796, 360)
+$script:txtLog.Location = New-Object System.Drawing.Point(12, 290)
+$script:txtLog.Size = New-Object System.Drawing.Size(796, 334)
 $script:txtLog.Anchor = "Top,Bottom,Left,Right"
 $form.Controls.Add($script:txtLog)
 
@@ -482,6 +496,7 @@ function Start-Game {
     $argv = @()
     $argv += $py.Prefix
     $argv += @($script:CorePath, "run", "--work", $work, "--detach")
+    if ($script:chkUnlock.Checked) { $argv += "--unlock" } else { $argv += "--no-unlock" }
     if ($script:txtSdl3.Text.Trim()) { $argv += @("--sdl3", $script:txtSdl3.Text.Trim()) }
     $runLine = (($argv | ForEach-Object { Format-Arg $_ }) -join " ")
     $p = Start-Process -FilePath $py.Exe -ArgumentList $runLine -NoNewWindow -Wait -PassThru `

@@ -61,10 +61,11 @@ launcher/build-windows-package.sh   # -> build/CustomRoboLauncher-windows.zip
 ```
 
 The AppImage uses `yad`/`zenity` and needs Python 3 and clang installed;
-CMake, Ninja and SDL3 are bundled. The Windows package uses a WinForms UI,
-can install Python 3 from the launcher, and needs clang and an SDL3
-development package; CMake and Ninja are bundled. See
-`launcher/README.md` and `launcher/windows/README.txt`.
+CMake, Ninja and SDL3 are bundled, and the launcher can install Python and
+clang. The Windows package uses a WinForms UI and is self-contained: Python,
+clang, SDL3, CMake and Ninja are all bundled, so it builds from a clean PC
+with only Dolphin's fonts and the disc image. See `launcher/README.md` and
+`launcher/windows/README.txt`.
 
 Both GUIs are front ends over `launcher/core.py`, which is also usable alone:
 
@@ -99,8 +100,10 @@ menu or save load cannot take it back:
 - shop stock for all parts
 - every Parts Glossary entry
 
-Set `CRBR_UNLOCK=0` to boot with normal story progression instead. The
-unlocks are runtime state; a normal in-game save still saves story progress.
+Set `CRBR_UNLOCK=0`, use `core.py run --no-unlock`, or turn off the
+launcher's **Unlocks** toggle to boot with normal story progression instead.
+The unlocks are runtime state; a normal in-game save still saves story
+progress.
 
 ## Status
 

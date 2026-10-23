@@ -192,6 +192,8 @@ def bundled_tool(name: str) -> str | None:
     elif name == "ninja":
         candidates = [root / "deps" / exe, root / "deps" / "ninja" / exe,
                       root / "tools" / exe]
+    elif name in ("clang++", "clang"):
+        candidates = [root / "deps" / "llvm-mingw" / "bin" / exe]
     else:
         candidates = []
     for p in candidates:
@@ -235,9 +237,12 @@ def run(cmd: list[str], log: Path, env: dict | None = None, cwd: Path | None = N
 def build_env(project: Path, sdl3: Path, gl_include: Path | None) -> dict:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(project) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-    # Let CMake find a bundled Ninja (it only searches PATH for the generator).
+    # Let CMake find a bundled Ninja (it only searches PATH for the generator)
+    # and the bundled clang's runtime DLLs.
     tool_dirs = [str(d) for d in (bundle_root() / "deps" / "cmake" / "bin",
-                                  bundle_root() / "deps") if d.is_dir()]
+                                  bundle_root() / "deps",
+                                  bundle_root() / "deps" / "llvm-mingw" / "bin")
+                 if d.is_dir()]
     if tool_dirs:
         env["PATH"] = os.pathsep.join(tool_dirs) + os.pathsep + env.get("PATH", "")
     if os.name == "nt":
@@ -351,7 +356,8 @@ def build(iso: str, work: str, *, source: str | None = None, log_path: str | Non
 
 
 def run_game(work: str, *, source: str | None = None, sdl3: str | None = None,
-             extra: list[str] | None = None, detached: bool = False):
+             extra: list[str] | None = None, detached: bool = False,
+             unlock: bool | None = None):
     work = Path(work).expanduser().resolve()
     project = Path(source).resolve() if source else project_root()
     exe = work / "recomp-build" / ("wiiboot.exe" if os.name == "nt" else "wiiboot")
@@ -365,6 +371,8 @@ def run_game(work: str, *, source: str | None = None, sdl3: str | None = None,
         install_fonts(work)
     sdl = find_sdl3(sdl3)
     env = build_env(project, sdl, find_gl_include(None))
+    if unlock is not None:
+        env["CRBR_UNLOCK"] = "1" if unlock else "0"
     cmd = [str(exe), str(extract), "--fonts", str(fonts)]
     names = work / "names.tsv"
     if names.is_file():
@@ -415,6 +423,9 @@ def main(argv=None) -> int:
     r.add_argument("--source")
     r.add_argument("--sdl3")
     r.add_argument("--detach", action="store_true")
+    ug = r.add_mutually_exclusive_group()
+    ug.add_argument("--unlock", dest="unlock", action="store_true", default=None)
+    ug.add_argument("--no-unlock", dest="unlock", action="store_false")
     r.add_argument("args", nargs=argparse.REMAINDER)
 
     f = sub.add_parser("fonts")
@@ -432,7 +443,8 @@ def main(argv=None) -> int:
             print(install_fonts(Path(a.work), Path(a.source) if a.source else None))
         else:
             extra = a.args[1:] if a.args and a.args[0] == "--" else a.args
-            run_game(a.work, source=a.source, sdl3=a.sdl3, extra=extra, detached=a.detach)
+            run_game(a.work, source=a.source, sdl3=a.sdl3, extra=extra,
+                     detached=a.detach, unlock=a.unlock)
     except Exception as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

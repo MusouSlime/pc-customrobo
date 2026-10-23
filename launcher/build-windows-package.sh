@@ -46,6 +46,12 @@ cp "$ROOT/build/tools/ninja-windows/ninja.exe" "$PKG/deps/ninja.exe"
 [ -f "$ROOT/build/tools/ninja-windows/COPYING-NINJA.txt" ] && \
     cp "$ROOT/build/tools/ninja-windows/COPYING-NINJA.txt" "$PKG/deps/"
 
+echo "== bundling clang, SDL3 and Python"
+mkdir -p "$PKG/deps/llvm-mingw" "$PKG/deps/sdl3" "$PKG/deps/python"
+cp -a "$ROOT/build/tools/llvm-mingw/." "$PKG/deps/llvm-mingw/"
+cp -a "$ROOT/build/tools/sdl3-mingw/." "$PKG/deps/sdl3/"
+cp -a "$ROOT/build/tools/python-embed/." "$PKG/deps/python/"
+
 # Keep the source tree's executable bits from leaking into odd places; the
 # .cmd and .ps1 are launched explicitly by Windows.
 echo "== packaging $ZIP"

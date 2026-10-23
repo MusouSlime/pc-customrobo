@@ -11,6 +11,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CACHE="${TOOLS_DIR:-$ROOT/build/tools}"
 CMAKE_VERSION="${CMAKE_VERSION:-3.31.6}"
 NINJA_VERSION="${NINJA_VERSION:-1.12.1}"
+LLVM_MINGW_VERSION="${LLVM_MINGW_VERSION:-20261020}"
+SDL3_VERSION="${SDL3_VERSION:-3.4.18}"
+PYTHON_EMBED_VERSION="${PYTHON_EMBED_VERSION:-3.12.10}"
 TARGET="${1:-}"
 
 mkdir -p "$CACHE"
@@ -82,6 +85,7 @@ fetch_linux() {
 
 fetch_windows() {
     local c="$CACHE/cmake-windows" n="$CACHE/ninja-windows"
+    local llvm="$CACHE/llvm-mingw" sdl="$CACHE/sdl3-mingw" py="$CACHE/python-embed"
     if [ ! -f "$c/bin/cmake.exe" ]; then
         need_unzip
         fetch "https://github.com/Kitware/CMake/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION-windows-x86_64.zip" \
@@ -103,8 +107,62 @@ fetch_windows() {
         mv "$CACHE/.ninja-windows-extract" "$n"
         ninja_license "$n"
     fi
+
+    # A portable clang + UCRT sysroot and a matching SDL3, so the Windows
+    # package does not need MSYS2 or a separately installed compiler.
+    if [ ! -x "$llvm/bin/clang++.exe" ]; then
+        need_unzip
+        fetch "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_VERSION/llvm-mingw-$LLVM_MINGW_VERSION-ucrt-x86_64.zip" \
+              "$CACHE/llvm-mingw.zip"
+        rm -rf "$llvm" "$CACHE/.llvm-mingw-extract"
+        mkdir -p "$CACHE/.llvm-mingw-extract"
+        unzip -q -o "$CACHE/llvm-mingw.zip" -d "$CACHE/.llvm-mingw-extract"
+        mv "$CACHE/.llvm-mingw-extract/llvm-mingw-$LLVM_MINGW_VERSION-ucrt-x86_64" "$llvm"
+        rmdir "$CACHE/.llvm-mingw-extract" 2>/dev/null || true
+        # Keep only the x86_64 UCRT target; the archive also carries every
+        # other architecture and a bundled Python.
+        rm -rf "$llvm/python" "$llvm/busybox" \
+               "$llvm/i686-w64-mingw32" "$llvm/aarch64-w64-mingw32" \
+               "$llvm/armv7-w64-mingw32"
+        rm -rf "$llvm"/lib/clang/*/lib/linux
+        # Editor/debugger front ends are not part of a build.
+        rm -f "$llvm/bin/clangd.exe" "$llvm/bin/clang-tidy.exe" \
+              "$llvm/bin/clang-format.exe" "$llvm/bin/clang-scan-deps"*.exe \
+              "$llvm/bin/liblldb.dll" "$llvm/bin/libpython"*.dll \
+              "$llvm/bin/lldb"*.exe
+    fi
+    if [ ! -f "$sdl/lib/cmake/SDL3/SDL3Config.cmake" ]; then
+        need_unzip
+        fetch "https://github.com/libsdl-org/SDL/releases/download/release-$SDL3_VERSION/SDL3-devel-$SDL3_VERSION-mingw.zip" \
+              "$CACHE/sdl3-mingw.zip"
+        rm -rf "$sdl" "$CACHE/.sdl3-mingw-extract"
+        mkdir -p "$CACHE/.sdl3-mingw-extract"
+        unzip -q -o "$CACHE/sdl3-mingw.zip" -d "$CACHE/.sdl3-mingw-extract"
+        mkdir -p "$sdl"
+        cp -a "$CACHE/.sdl3-mingw-extract/SDL3-$SDL3_VERSION/x86_64-w64-mingw32/." "$sdl/"
+        cp "$CACHE/.sdl3-mingw-extract/SDL3-$SDL3_VERSION/LICENSE.txt" "$sdl/" 2>/dev/null || true
+        rm -rf "$CACHE/.sdl3-mingw-extract"
+    fi
+    if [ ! -f "$py/python.exe" ]; then
+        need_unzip
+        fetch "https://www.python.org/ftp/python/$PYTHON_EMBED_VERSION/python-$PYTHON_EMBED_VERSION-embed-amd64.zip" \
+              "$CACHE/python-embed.zip"
+        rm -rf "$py"
+        mkdir -p "$py"
+        unzip -q -o "$CACHE/python-embed.zip" -d "$py"
+        # The embeddable build isolates sys.path from PYTHONPATH.  Add the
+        # package's project tree so `python -m wiikit.disc` still works.
+        for pth in "$py"/*._pth; do
+            [ -f "$pth" ] || continue
+            grep -qx '../../project' "$pth" || printf '\n../../project\n' >> "$pth"
+        done
+    fi
+
     echo "== bundled CMake: $c/bin/cmake.exe"
     echo "== bundled Ninja: $n/ninja.exe"
+    echo "== bundled clang: $llvm/bin/clang++.exe"
+    echo "== bundled SDL3: $sdl"
+    echo "== bundled Python: $py/python.exe"
 }
 
 case "$TARGET" in

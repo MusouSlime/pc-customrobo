@@ -211,8 +211,8 @@ drives it with WinForms.
 **What the packages carry.** The Linux AppImage bundles the project source,
 `tools/names-hooks.txt`, CMake, Ninja, SDL3 and the OpenGL headers (about
 12 MiB compressed). The Windows zip carries the source, the WinForms UI,
-CMake, Ninja and the GL headers; the user supplies the SDL3 development
-package that matches their compiler.
+Python, clang, SDL3, CMake, Ninja and the GL headers (about 133 MiB), so it
+builds on a clean PC.
 
 **Why a minimal name table.** The recompiler only needs names to resolve the
 runtime and port hooks. `tools/names-hooks.txt` contains the 26 hook names
@@ -230,17 +230,21 @@ launcher closing silently. The AppImage UI was started with
 **Windows.** wiikit already has `_WIN32` paths in `os.cpp`, `mem.cpp` and the
 CMake (`winmm`), and the WinForms launcher is complete, but no Windows build
 has been run on this host. The package therefore says so in its README and
-shows the failing compiler command in the log panel. Recommended environment:
-MSYS2 UCRT64 with clang and SDL3; CMake and Ninja are bundled.
+shows the failing compiler command in the log panel. It carries a portable
+llvm-mingw clang, SDL3, Python, CMake and Ninja, so no MSYS2 setup is needed.
 
-**Launcher dependencies.** CMake 3.31.6 and Ninja 1.12.1 are fetched at
-package-build time and carried in `deps/` by both launchers, so the user does
-not install either. The Windows form has an **Install Python** button that
-uses winget, then falls back to the official python.org installer. The Linux
-AppRun bootstrap offers to install `python3` through the distro's package
-manager when it is missing. The compiler and SDL3 development files remain
-the user's choice: the binary should match their runtime.
+**Launcher dependencies.** CMake 3.31.6, Ninja 1.12.1, Python 3.12, clang 23
+(llvm-mingw UCRT) and SDL3 3.4.18 are fetched at package-build time and carried
+in the Windows package's `deps/`, so a clean Windows PC needs no MSYS2,
+Visual Studio, Python, compiler or SDL3 install. The Windows form still has an
+**Install Python** button as a fallback. The Linux AppImage carries CMake,
+Ninja and SDL3 and uses the host clang; its AppRun bootstrap offers to install
+`python3`, and the menu offers to install clang through the distro package
+manager. The compiler still matches the user's C++ runtime instead of shipping
+a foreign Linux build.
 
 **Saves and unlocks.** The working card is `WORK/memcard/A.raw`; the launcher
-does not reset it. The unlock writes remain default-on (`CRBR_UNLOCK=0`
-restores normal progression).
+does not reset it. The unlock writes remain default-on; the Linux menu's
+**Unlocks: on/off** item and the Windows **Unlock all robos, parts and
+stages** checkbox toggle them per run (`CRBR_UNLOCK=0` restores normal
+progression for a direct run).
